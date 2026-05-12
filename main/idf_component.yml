@@ -1,0 +1,9 @@
+dependencies:
+  idf:
+    version: '>=4.1.0'
+  esp-idf-lib/pcf8574: '*'
+  esp-idf-lib/esp_idf_lib_helpers: '*'
+  esp-idf-lib/i2cdev: '*'
+  esp-idf-lib/ads111x: '*'
+  esp-idf-lib/ds3231: '*'
+  esp-idf-lib/mpu6050 : '*'

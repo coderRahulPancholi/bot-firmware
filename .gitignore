@@ -1,0 +1,25 @@
+# ESP-IDF Build Output
+build/
+.cache/
+managed_components/
+dependencies.lock
+sdkconfig.old
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.code-workspace
+
+# Python
+__pycache__/
+*.py[cod]
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
