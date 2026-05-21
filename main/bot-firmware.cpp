@@ -14,6 +14,8 @@
 
 // Hardware config
 #include "robot_config.h"
+// Include user-generated Blockly code
+#include "user_logic.h"
 
 static const char* TAG = "BOT_IDF";
 
@@ -49,10 +51,6 @@ void setMotors(int speedLeft, int speedRight) {
     else if (speedLeft > 0 && speedRight < 0) robot.turnRight();
     else                                       robot.stop();
 }
-// -----------------------------------------
-
-// Include user-generated Blockly code
-#include "user_logic.h"
 
 // =============================================
 // TELEMETRY TASK — streams JSON at 200ms
@@ -66,7 +64,7 @@ static void telemetryTask(void* pvParameters) {
         sensors.readAll();
 
         // Build compact JSON telemetry packet
-        printf("{\"rpm1\":%.1f,\"rpm2\":%.1f,\"spd1\":%.3f,\"spd2\":%.3f,"
+        printf("{\"device\":\"BotBuilder\",\"rpm1\":%.1f,\"rpm2\":%.1f,\"spd1\":%.3f,\"spd2\":%.3f,"
                "\"ir\":[%d,%d,%d,%d,%d,%d]}\n",
                rpm_l, rpm_r, speed_l, speed_r,
                sensors.getValue(0), sensors.getValue(1),
