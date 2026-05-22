@@ -95,6 +95,62 @@ static void app_ble_conn_event_handler(void *handler_args, esp_event_base_t base
     }
 }
 
+// --- Custom BLE UART Service (NUS) ---
+#define NUS_SERVICE_UUID {0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00, 0x40, 0x6E}
+#define NUS_RX_CHAR_UUID {0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x02, 0x00, 0x40, 0x6E}
+#define NUS_TX_CHAR_UUID {0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x03, 0x00, 0x40, 0x6E}
+
+static esp_err_t uart_rx_cb(const uint8_t *inbuf, uint16_t inlen,
+                            uint8_t **outbuf, uint16_t *outlen, void *priv_data, uint8_t *att_status)
+{
+    if (inbuf && inlen > 0) {
+        ESP_LOGI(TAG, "UART RX: %.*s", inlen, inbuf);
+    }
+    *att_status = ESP_IOT_ATT_SUCCESS;
+    return ESP_OK;
+}
+
+static esp_err_t uart_tx_cb(const uint8_t *inbuf, uint16_t inlen,
+                            uint8_t **outbuf, uint16_t *outlen, void *priv_data, uint8_t *att_status)
+{
+    *att_status = ESP_IOT_ATT_SUCCESS;
+    return ESP_OK;
+}
+
+static const esp_ble_conn_character_t uart_nu_lookup_table[] = {
+    {
+        "UART RX", BLE_CONN_UUID_TYPE_128, BLE_CONN_GATT_CHR_WRITE | BLE_CONN_GATT_CHR_WRITE_NO_RSP,
+        { .uuid128 = NUS_RX_CHAR_UUID }, uart_rx_cb
+    },
+    {
+        "UART TX", BLE_CONN_UUID_TYPE_128, BLE_CONN_GATT_CHR_READ | BLE_CONN_GATT_CHR_NOTIFY,
+        { .uuid128 = NUS_TX_CHAR_UUID }, uart_tx_cb
+    }
+};
+
+static const esp_ble_conn_svc_t uart_svc = {
+    .type = BLE_CONN_UUID_TYPE_128,
+    .nu_lookup_count = sizeof(uart_nu_lookup_table) / sizeof(uart_nu_lookup_table[0]),
+    .uuid = { .uuid128 = NUS_SERVICE_UUID },
+    .nu_lookup = (esp_ble_conn_character_t *)uart_nu_lookup_table
+};
+
+static void app_ble_uart_init(void)
+{
+    esp_ble_conn_add_svc(&uart_svc);
+}
+
+// Function to send telemetry over BLE Notify
+void ble_uart_send(const char *data) {
+    uint16_t len = strlen(data);
+    esp_ble_conn_data_t conn_data = {};
+    conn_data.type = BLE_CONN_UUID_TYPE_128;
+    memcpy(conn_data.uuid.uuid128, (uint8_t[])NUS_TX_CHAR_UUID, 16);
+    conn_data.data = (uint8_t *)data;
+    conn_data.data_len = len;
+    esp_ble_conn_notify(&conn_data);
+}
+
 // --- Global Objects (same pattern as line_following_robot) ---
 SystemMonitor monitor;
 
@@ -140,12 +196,19 @@ static void telemetryTask(void* pvParameters) {
         sensors.readAll();
 
         // Build compact JSON telemetry packet
-        printf("{\"device\":\"BotBuilder\",\"rpm1\":%.1f,\"rpm2\":%.1f,\"spd1\":%.3f,\"spd2\":%.3f,"
+        char telemetry_buf[128];
+        snprintf(telemetry_buf, sizeof(telemetry_buf),
+               "{\"device\":\"BotBuilder\",\"rpm1\":%.1f,\"rpm2\":%.1f,\"spd1\":%.3f,\"spd2\":%.3f,"
                "\"ir\":[%d,%d,%d,%d,%d,%d]}\n",
                rpm_l, rpm_r, speed_l, speed_r,
                sensors.getValue(0), sensors.getValue(1),
                sensors.getValue(2), sensors.getValue(3),
                sensors.getValue(4), sensors.getValue(5));
+
+        // Print to serial
+        printf("%s", telemetry_buf);
+        // Send over BLE
+        ble_uart_send(telemetry_buf);
 
         vTaskDelay(pdMS_TO_TICKS(200));
     }
@@ -183,6 +246,7 @@ extern "C" void app_main(void)
 
     esp_ble_conn_init(&ble_config);
     app_ble_cts_init();
+    app_ble_uart_init(); // Initialize UART GATT Service
     if (esp_ble_conn_start() != ESP_OK) {
         esp_ble_conn_stop();
         esp_ble_conn_deinit();
