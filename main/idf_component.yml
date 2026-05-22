@@ -1,6 +1,10 @@
 dependencies:
   idf:
     version: '>=4.1.0'
+  ble_conn_mgr:
+    version: ~1.*
+  ble_services:
+    version: ~1.*
   esp-idf-lib/pcf8574: '*'
   esp-idf-lib/esp_idf_lib_helpers: '*'
   esp-idf-lib/i2cdev: '*'
