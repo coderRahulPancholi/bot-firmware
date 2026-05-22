@@ -10,6 +10,8 @@ extern "C" {
 #include "nvs_flash.h"
 #include "esp_ble_conn_mgr.h"
 #include "esp_cts.h"
+#include "esp_ota_ops.h"
+#include "esp_ble_ota_svc.h"
 }
 
 // Custom component includes
@@ -151,6 +153,64 @@ void ble_uart_send(const char *data) {
     esp_ble_conn_notify(&conn_data);
 }
 
+// --- OTA Implementation ---
+static esp_ota_handle_t update_handle = 0;
+static const esp_partition_t *update_partition = NULL;
+static size_t ota_total_bytes = 0;
+
+extern "C" void esp_ble_ota_recv_cmd_data(const uint8_t *data, uint16_t len) {
+    if (len == 0) return;
+    if (data[0] == 0x01) { // START OTA
+        ESP_LOGI(TAG, "OTA Begin");
+        update_partition = esp_ota_get_next_update_partition(NULL);
+        if (update_partition == NULL) {
+            ESP_LOGE(TAG, "No OTA partition found");
+            return;
+        }
+        esp_err_t err = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &update_handle);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_ota_begin failed (%s)", esp_err_to_name(err));
+            return;
+        }
+        ota_total_bytes = 0;
+        esp_ble_ota_notify_command_raw((const uint8_t*)"OK", 2);
+    } else if (data[0] == 0x02) { // END OTA
+        ESP_LOGI(TAG, "OTA End");
+        esp_err_t err = esp_ota_end(update_handle);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_ota_end failed!");
+            return;
+        }
+        err = esp_ota_set_boot_partition(update_partition);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_ota_set_boot_partition failed!");
+            return;
+        }
+        esp_ble_ota_notify_command_raw((const uint8_t*)"OK", 2);
+        ESP_LOGI(TAG, "OTA Success, restarting in 1s...");
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        esp_restart();
+    }
+}
+
+extern "C" void esp_ble_ota_recv_fw_data(const uint8_t *data, uint16_t len) {
+    if (update_handle != 0) {
+        esp_err_t err = esp_ota_write(update_handle, data, len);
+        if (err == ESP_OK) {
+            ota_total_bytes += len;
+            // Send ACK with received byte count
+            uint8_t ack[4];
+            ack[0] = (ota_total_bytes >> 24) & 0xFF;
+            ack[1] = (ota_total_bytes >> 16) & 0xFF;
+            ack[2] = (ota_total_bytes >> 8) & 0xFF;
+            ack[3] = ota_total_bytes & 0xFF;
+            esp_ble_ota_notify_recv_fw_raw(ack, 4);
+        } else {
+            ESP_LOGE(TAG, "esp_ota_write failed (%s)", esp_err_to_name(err));
+        }
+    }
+}
+
 // --- Global Objects (same pattern as line_following_robot) ---
 SystemMonitor monitor;
 
@@ -247,6 +307,8 @@ extern "C" void app_main(void)
     esp_ble_conn_init(&ble_config);
     app_ble_cts_init();
     app_ble_uart_init(); // Initialize UART GATT Service
+    esp_ble_ota_svc_init(); // Initialize OTA GATT Service
+
     if (esp_ble_conn_start() != ESP_OK) {
         esp_ble_conn_stop();
         esp_ble_conn_deinit();
