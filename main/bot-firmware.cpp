@@ -22,7 +22,11 @@ extern "C" {
 
 // Hardware config
 #include "robot_config.h"
+#include "robot_display.h"
 // Include user-generated Blockly code
+// Forward declarations for Blockly generated code
+void delay(uint32_t ms);
+void setMotors(int speedLeft, int speedRight);
 #include "user_logic.h"
 
 static const char* TAG = "BOT_IDF";
@@ -245,15 +249,108 @@ void setMotors(int speedLeft, int speedRight) {
 }
 
 // =============================================
+// DISPLAY UI FUNCTIONS
+// =============================================
+static bool ui_initialized = false;
+
+static void drawStaticUI() {
+#ifdef USER_ROTATION
+    display.setRotation(USER_ROTATION);
+#else
+    display.setRotation(1); 
+#endif
+
+#ifdef USER_BG_COLOR
+    display.fillScreen(USER_BG_COLOR);
+#else
+    display.fillScreen(Config::COLOR_BLACK);
+#endif
+    
+    display.setTextColor(Config::COLOR_CYAN);
+    display.setTextSize(1);
+    display.setCursor(50, 5);
+    display.print("IR SENSORS");
+    
+    display.drawLine(0, 15, 160, 15, Config::COLOR_WHITE);
+    
+    display.setTextColor(Config::COLOR_YELLOW);
+    display.setCursor(5, 20); display.print("S1:"); 
+    display.setCursor(5, 35); display.print("S2:"); 
+    display.setCursor(5, 50); display.print("S3:");
+    
+    display.setCursor(85, 20); display.print("S4:"); 
+    display.setCursor(85, 35); display.print("S5:"); 
+    display.setCursor(85, 50); display.print("S6:");
+    
+    display.drawLine(0, 70, 160, 70, Config::COLOR_WHITE);
+    
+    display.setTextColor(Config::COLOR_CYAN);
+    display.setCursor(50, 75); display.print("MOTOR RPM");
+    
+    display.drawLine(0, 85, 160, 85, Config::COLOR_WHITE);
+    
+    display.setTextColor(Config::COLOR_GREEN);
+    display.setCursor(5, 95); display.print("M1 (L):");
+    display.setCursor(5, 110); display.print("M2 (R):");
+}
+
+static void updateSensorUI(int16_t s0, int16_t s1, int16_t s2, int16_t s3, int16_t s4, int16_t s5) {
+    display.setTextSize(1); 
+    display.setTextColor(Config::COLOR_WHITE); 
+    
+    // Clear old text by drawing a black rectangle over the values
+    display.fillRect(25, 20, 40, 8, Config::COLOR_BLACK);
+    display.fillRect(25, 35, 40, 8, Config::COLOR_BLACK);
+    display.fillRect(25, 50, 40, 8, Config::COLOR_BLACK);
+    
+    display.fillRect(105, 20, 40, 8, Config::COLOR_BLACK);
+    display.fillRect(105, 35, 40, 8, Config::COLOR_BLACK);
+    display.fillRect(105, 50, 40, 8, Config::COLOR_BLACK);
+
+    char buf[16];
+    sprintf(buf, "%d", s0); display.setCursor(25, 20); display.print(buf);
+    sprintf(buf, "%d", s1); display.setCursor(25, 35); display.print(buf);
+    sprintf(buf, "%d", s2); display.setCursor(25, 50); display.print(buf);
+    
+    sprintf(buf, "%d", s3); display.setCursor(105, 20); display.print(buf);
+    sprintf(buf, "%d", s4); display.setCursor(105, 35); display.print(buf);
+    sprintf(buf, "%d", s5); display.setCursor(105, 50); display.print(buf);
+}
+
+static void updateMotorUI(float rpm_l, float rpm_r) {
+    display.setTextSize(1); 
+    display.setTextColor(Config::COLOR_WHITE); 
+    
+    display.fillRect(55, 95, 60, 8, Config::COLOR_BLACK);
+    display.fillRect(55, 110, 60, 8, Config::COLOR_BLACK);
+    
+    char buf[16];
+    snprintf(buf, sizeof(buf), "%.1f", rpm_l); display.setCursor(55, 95); display.print(buf);
+    snprintf(buf, sizeof(buf), "%.1f", rpm_r); display.setCursor(55, 110); display.print(buf);
+}
+
+// =============================================
 // TELEMETRY TASK — streams JSON at 200ms
 // =============================================
 static void telemetryTask(void* pvParameters) {
     while (1) {
+        if (!ui_initialized) {
+            drawStaticUI();
+            ui_initialized = true;
+        }
+
         float rpm_l, rpm_r, speed_l, speed_r;
         robot.getSpeeds(rpm_l, rpm_r, speed_l, speed_r);
 
         // Read all IR sensors
         sensors.readAll();
+
+        // Update LCD Display with Arduino layout
+        updateSensorUI(
+            sensors.getValue(0), sensors.getValue(1), sensors.getValue(2),
+            sensors.getValue(3), sensors.getValue(4), sensors.getValue(5)
+        );
+        updateMotorUI(rpm_l, rpm_r);
 
         // Build compact JSON telemetry packet
         char telemetry_buf[128];
@@ -318,7 +415,20 @@ extern "C" void app_main(void)
 
     // 1. Init LCD display
     monitor.init();
+    display.init();
 
+#ifdef USER_ROTATION
+    display.setRotation(USER_ROTATION);
+#endif
+#ifdef USER_TEXT_SIZE
+    display.setTextSize(USER_TEXT_SIZE);
+#endif
+#ifdef USER_TEXT_COLOR
+    display.setTextColor(USER_TEXT_COLOR);
+#endif
+#ifdef USER_BG_COLOR
+    display.fillScreen(USER_BG_COLOR);
+#endif
     // 2. Init I2C bus
     ESP_ERROR_CHECK(i2cdev_init());
 

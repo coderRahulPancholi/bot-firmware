@@ -71,4 +71,15 @@ namespace Config {
     constexpr float PID_MIN_OUT      = -80.0f;
     constexpr float PID_MAX_OUT      = 80.0f;
 
+    // ==========================================
+    // 7. DISPLAY CONSTANTS
+    // ==========================================
+    constexpr uint16_t COLOR_BLACK = 0x0000;
+    constexpr uint16_t COLOR_WHITE = 0xFFFF;
+    constexpr uint16_t COLOR_RED   = 0xF800;
+    constexpr uint16_t COLOR_GREEN = 0x07E0;
+    constexpr uint16_t COLOR_BLUE  = 0x001F;
+    constexpr uint16_t COLOR_CYAN  = 0x07FF;
+    constexpr uint16_t COLOR_YELLOW= 0xFFE0;
+
 } // namespace Config

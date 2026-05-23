@@ -60,7 +60,13 @@ esp_err_t SystemMonitor::init() {
     // 5. Turn it on
     esp_lcd_panel_reset(panel_handle);
     esp_lcd_panel_init(panel_handle);
+    
+    // Most 1.8" screens don't need a gap, and don't need inverted colors natively
+    esp_lcd_panel_invert_color(panel_handle, false); 
     esp_lcd_panel_disp_on_off(panel_handle, true);
+
+    // Wait 500ms for panel to wake up and stabilize before turning on backlight
+    vTaskDelay(pdMS_TO_TICKS(500));
 
     // Turn on the backlight (PWM could be used here, but we just turn it to HIGH)
     gpio_set_direction(LCD_PIN_BLK, GPIO_MODE_OUTPUT);
@@ -207,6 +213,9 @@ void SystemMonitor::updateBatteryDisplay(float voltage, int percentage) {
 
             // Blast the frame to the LCD
             esp_lcd_panel_draw_bitmap(panel_handle, 0, 0, LCD_H_RES, LCD_V_RES, screen_buffer);
+
+            // Wait for SPI DMA transfer to finish (40KB @ 20MHz takes ~16ms)
+            vTaskDelay(pdMS_TO_TICKS(30));
 
             // Free the memory so the ESP32 doesn't crash
             free(screen_buffer);

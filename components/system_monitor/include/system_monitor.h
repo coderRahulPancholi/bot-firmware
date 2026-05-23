@@ -45,6 +45,7 @@ private:
     static void drawString(int x, int y, const char* text, uint16_t color, uint16_t bg_color, uint16_t* buffer);
 
 public:
+    static esp_lcd_panel_handle_t getPanelHandle() { return panel_handle; }
     esp_err_t init();
     static void reportError(const char* module, const char* msg, esp_err_t err);
     void updateBatteryDisplay(float voltage, int percentage);
